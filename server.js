@@ -108,7 +108,7 @@ app.get("/districts/:territoryId", (req, res) => {
 
 app.get("/seats/:districtId", (req, res) => {
   const districtId = req.params.districtId;
-  db.query("SELECT * FROM seat WHERE DistricID = ?", [districtId], (err, results) => {
+  db.query("SELECT * FROM Seat WHERE DistricID = ?", [districtId], (err, results) => {
     if (err) {
       console.error("Error fetching seats:", err);
       return res.status(500).json({ error: "Database error" });
