@@ -7,11 +7,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Updated database connection for Railway
 const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "populationdb"
+  host: process.env.MYSQLHOST || "localhost",
+  user: process.env.MYSQLUSER || "root",
+  password: process.env.MYSQLPASSWORD || "",
+  database: process.env.MYSQLDATABASE || "railway",
+  port: process.env.MYSQLPORT || 3306
 });
 
 db.connect(err => {
@@ -19,7 +21,7 @@ db.connect(err => {
     console.error("Database connection failed:", err);
     return;
   }
-  console.log("Connected to MySQL Database: populationdb");
+  console.log("Connected to MySQL Database:", process.env.MYSQLDATABASE || "railway");
 });
 
 app.get("/countries", (req, res) => {
@@ -56,7 +58,8 @@ app.get("/districts/:territoryId", (req, res) => {
 
 app.get("/seats/:districtId", (req, res) => {
   const districtId = req.params.districtId;
-  db.query("SELECT * FROM seat WHERE DistricID = ?", [districtId], (err, results) => {
+  // Fixed: Changed 'seat' to 'Seat' to match your actual table name
+  db.query("SELECT * FROM Seat WHERE DistricID = ?", [districtId], (err, results) => {
     if (err) {
       console.error("Error fetching seats:", err);
       return res.status(500).json({ error: "Database error" });
@@ -126,7 +129,8 @@ app.post("/districts", (req, res) => {
 
 app.post("/seats", (req, res) => {
   const { CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal } = req.body;
-  const sql = "INSERT INTO seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
+  // Fixed: Changed 'seat' to 'Seat' to match your actual table name
+  const sql = "INSERT INTO Seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
   
   db.query(sql, [CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal], (err, result) => {
     if (err) {
@@ -136,7 +140,6 @@ app.post("/seats", (req, res) => {
     res.status(201).json({ message: "Seat added successfully", id: result.insertId });
   });
 });
-
 
 app.get("/citizens/district/:districtId", (req, res) => {
   const districtId = req.params.districtId;
@@ -160,7 +163,8 @@ app.get("/citizens/seat/:seatId", (req, res) => {
   });
 });
 
-const PORT = 5000;
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
