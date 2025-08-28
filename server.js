@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Database connection with retry logic for Railway
+
 let db;
 let connectionAttempts = 0;
 const maxAttempts = 5;
@@ -35,7 +35,7 @@ function connectWithRetry() {
 
   db.connect(err => {
     if (err) {
-      console.error(`❌ Connection attempt ${connectionAttempts} failed:`, err.message);
+      console.error(`Connection attempt ${connectionAttempts} failed:`, err.message);
       
       if (connectionAttempts < maxAttempts) {
         console.log('Retrying in 3 seconds...');
@@ -53,11 +53,11 @@ function connectWithRetry() {
       return;
     }
     
-    console.log(`✅ Connected to MySQL Database: ${dbConfig.database}`);
-    connectionAttempts = 0; // Reset on successful connection
+    console.log(` Connected to MySQL Database: ${dbConfig.database}`);
+    connectionAttempts = 0; 
   });
 
-  // Handle connection errors after initial connection
+  
   db.on('error', (err) => {
     console.error('Database connection error:', err);
     if (err.code === 'PROTOCOL_CONNECTION_LOST') {
@@ -67,7 +67,7 @@ function connectWithRetry() {
   });
 }
 
-// Initial connection
+
 connectWithRetry();
 
 app.get("/countries", (req, res) => {
