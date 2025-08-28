@@ -2,6 +2,7 @@ const express = require("express");
 const mysql = require("mysql2");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const dns = require("dns");
 
 const app = express();
 
@@ -18,62 +19,129 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-// Create connection pool with validated options
-const pool = mysql.createPool({
-  host: process.env.MYSQLHOST || "localhost",
-  user: process.env.MYSQLUSER || "root",
-  password: process.env.MYSQLPASSWORD || "",
-  database: process.env.MYSQLDATABASE || "railway",
-  port: process.env.MYSQLPORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  // Removed invalid options: acquireTimeout, timeout, reconnect
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
-});
-
-// Get a promise-based interface to the pool
-const promisePool = pool.promise();
-
-// Enhanced connection test with retry logic
-async function testConnection(retries = 5, delay = 3000) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const connection = await promisePool.getConnection();
-      console.log("✅ Connected to MySQL Database successfully!");
-      console.log("Host:", process.env.MYSQLHOST);
-      console.log("Database:", process.env.MYSQLDATABASE);
-      console.log("User:", process.env.MYSQLUSER);
-      
-      // Test a simple query
-      const [results] = await connection.query("SELECT VERSION() as version");
-      console.log("MySQL Version:", results[0].version);
-      
-      connection.release();
-      return true;
-    } catch (err) {
-      console.error(`❌ Connection attempt ${i + 1} failed:`, err.message);
-      
-      if (i === retries - 1) {
-        console.error("All connection attempts failed. Please check your database configuration.");
-        console.log("Current environment variables:", {
-          MYSQLHOST: process.env.MYSQLHOST,
-          MYSQLUSER: process.env.MYSQLUSER,
-          MYSQLDATABASE: process.env.MYSQLDATABASE,
-          MYSQLPORT: process.env.MYSQLPORT
-        });
-        return false;
+// Function to test DNS resolution
+async function testDnsResolution(hostname) {
+  return new Promise((resolve) => {
+    dns.lookup(hostname, (err, address) => {
+      if (err) {
+        console.log(`❌ DNS resolution failed for ${hostname}: ${err.message}`);
+        resolve(false);
+      } else {
+        console.log(`✅ DNS resolution successful for ${hostname} -> ${address}`);
+        resolve(true);
       }
-      
-      console.log(`Retrying in ${delay/1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+    });
+  });
+}
+
+// Database configuration with multiple host fallbacks
+const getDbConfig = () => {
+  const hostsToTry = [
+    process.env.EXTERNAL_MYSQLHOST,
+    'switchyard.proxy.rlwy.net', // From your earlier logs
+    process.env.MYSQLHOST,
+    'mysql.railway.internal',
+    'localhost'
+  ].filter(Boolean); // Remove any undefined/null values
+
+  return {
+    host: hostsToTry[0], // Will be updated during connection test
+    user: process.env.MYSQLUSER || "root",
+    password: process.env.MYSQLPASSWORD || "",
+    database: process.env.MYSQLDATABASE || "railway",
+    port: process.env.MYSQLPORT || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    connectTimeout: 60000,
+    acquireTimeout: 60000,
+    timeout: 60000,
+    reconnect: true
+  };
+};
+
+// Create connection pool
+let pool = mysql.createPool(getDbConfig());
+let promisePool = pool.promise();
+
+// Enhanced connection test with multiple hostname fallbacks
+async function testConnection(retries = 5, delay = 3000) {
+  const hostsToTry = [
+    process.env.EXTERNAL_MYSQLHOST,
+    'switchyard.proxy.rlwy.net',
+    process.env.MYSQLHOST,
+    'mysql.railway.internal',
+    'localhost'
+  ].filter(Boolean);
+
+  console.log('Testing connection with hosts:', hostsToTry);
+
+  for (let i = 0; i < retries; i++) {
+    for (const host of hostsToTry) {
+      try {
+        console.log(`Attempt ${i + 1}: Trying to connect to ${host}...`);
+        
+        // Test DNS resolution first
+        const dnsWorking = await testDnsResolution(host);
+        if (!dnsWorking) {
+          console.log(`Skipping ${host} due to DNS issues`);
+          continue;
+        }
+        
+        // Create a temporary connection to test this host
+        const tempConfig = { ...getDbConfig(), host };
+        const tempPool = mysql.createPool(tempConfig);
+        const tempPromisePool = tempPool.promise();
+        
+        const connection = await tempPromisePool.getConnection();
+        console.log(`✅ Connected to MySQL at ${host} successfully!`);
+        
+        // Test a query
+        const [results] = await connection.query("SELECT VERSION() as version, DATABASE() as db");
+        console.log("MySQL Version:", results[0].version);
+        console.log("Current Database:", results[0].db);
+        
+        connection.release();
+        tempPool.end();
+        
+        // Update the main pool to use this successful host
+        pool.end(() => {
+          console.log('Closed previous connection pool');
+        });
+        
+        pool = mysql.createPool({ ...getDbConfig(), host });
+        promisePool = pool.promise();
+        
+        console.log(`🎉 Successfully connected to database using host: ${host}`);
+        return true;
+      } catch (err) {
+        console.error(`❌ Connection to ${host} failed:`, err.message);
+        // Continue to next host
+      }
     }
+    
+    if (i === retries - 1) {
+      console.error("All connection attempts failed. Please check your database configuration.");
+      console.log("Current environment variables:", {
+        MYSQLHOST: process.env.MYSQLHOST,
+        EXTERNAL_MYSQLHOST: process.env.EXTERNAL_MYSQLHOST,
+        MYSQLUSER: process.env.MYSQLUSER,
+        MYSQLDATABASE: process.env.MYSQLDATABASE,
+        MYSQLPORT: process.env.MYSQLPORT,
+        hasPassword: !!process.env.MYSQLPASSWORD
+      });
+      return false;
+    }
+    
+    console.log(`Retrying in ${delay/1000} seconds... (Attempt ${i + 1}/${retries})`);
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
 }
 
-// Test connection on startup
-testConnection();
+// Test connection on startup with more retries
+testConnection(8, 4000);
 
 // Health check endpoint
 app.get("/", (req, res) => {
@@ -82,19 +150,19 @@ app.get("/", (req, res) => {
     status: "success",
     timestamp: new Date().toISOString(),
     database: process.env.MYSQLDATABASE,
-    host: process.env.MYSQLHOST
+    host: pool.config.connectionConfig.host
   });
 });
 
 // Database health check
 app.get("/health", async (req, res) => {
   try {
-    const [results] = await promisePool.query("SELECT 1");
+    const [results] = await promisePool.query("SELECT 1 as test");
     res.json({ 
       status: "healthy", 
       database: "connected",
       timestamp: new Date().toISOString(),
-      host: process.env.MYSQLHOST
+      host: pool.config.connectionConfig.host
     });
   } catch (err) {
     res.status(500).json({ 
@@ -104,6 +172,20 @@ app.get("/health", async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
+});
+
+// Debug endpoint to check connection details
+app.get("/debug", (req, res) => {
+  res.json({
+    currentHost: pool.config.connectionConfig.host,
+    MYSQLHOST: process.env.MYSQLHOST,
+    EXTERNAL_MYSQLHOST: process.env.EXTERNAL_MYSQLHOST,
+    MYSQLUSER: process.env.MYSQLUSER,
+    MYSQLDATABASE: process.env.MYSQLDATABASE,
+    MYSQLPORT: process.env.MYSQLPORT,
+    hasPassword: !!process.env.MYSQLPASSWORD,
+    nodeEnv: process.env.NODE_ENV
+  });
 });
 
 // Get all countries
@@ -283,9 +365,10 @@ app.use((req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(` Server running on port ${PORT}`);
-  console.log(` Database: ${process.env.MYSQLDATABASE}`);
-  console.log(` Host: ${process.env.MYSQLHOST}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Database: ${process.env.MYSQLDATABASE || 'Not specified'}`);
+  console.log(`🌐 Current host: ${pool.config.connectionConfig.host}`);
+  console.log(`👤 Database user: ${process.env.MYSQLUSER || 'Not specified'}`);
 });
