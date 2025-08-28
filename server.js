@@ -4,10 +4,21 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
+
+// Updated CORS configuration for deployment
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    /\.railway\.app$/,  // Allow all Railway subdomains
+    /\.vercel\.app$/,   // In case you deploy frontend elsewhere
+    /\.netlify\.app$/   // In case you deploy frontend elsewhere
+  ],
+  credentials: true
+}));
+
 app.use(bodyParser.json());
 
-// Updated database connection for Railway
+// Database configuration
 const db = mysql.createConnection({
   host: process.env.MYSQLHOST || "localhost",
   user: process.env.MYSQLUSER || "root",
@@ -22,6 +33,34 @@ db.connect(err => {
     return;
   }
   console.log("Connected to MySQL Database:", process.env.MYSQLDATABASE || "railway");
+});
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "Citizen Registry API is running!",
+    status: "success",
+    timestamp: new Date().toISOString(),
+    database: process.env.MYSQLDATABASE || "railway"
+  });
+});
+
+// Test database connection endpoint
+app.get("/health", (req, res) => {
+  db.query("SELECT 1", (err, results) => {
+    if (err) {
+      return res.status(500).json({ 
+        status: "error", 
+        message: "Database connection failed",
+        error: err.message 
+      });
+    }
+    res.json({ 
+      status: "healthy", 
+      database: "connected",
+      timestamp: new Date().toISOString()
+    });
+  });
 });
 
 app.get("/countries", (req, res) => {
@@ -58,7 +97,6 @@ app.get("/districts/:territoryId", (req, res) => {
 
 app.get("/seats/:districtId", (req, res) => {
   const districtId = req.params.districtId;
-  // Fixed: Changed 'seat' to 'Seat' to match your actual table name
   db.query("SELECT * FROM Seat WHERE DistricID = ?", [districtId], (err, results) => {
     if (err) {
       console.error("Error fetching seats:", err);
@@ -129,7 +167,6 @@ app.post("/districts", (req, res) => {
 
 app.post("/seats", (req, res) => {
   const { CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal } = req.body;
-  // Fixed: Changed 'seat' to 'Seat' to match your actual table name
   const sql = "INSERT INTO Seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
   
   db.query(sql, [CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal], (err, result) => {
@@ -163,8 +200,7 @@ app.get("/citizens/seat/:seatId", (req, res) => {
   });
 });
 
-
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
