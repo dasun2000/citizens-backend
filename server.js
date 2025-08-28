@@ -70,6 +70,10 @@ function connectWithRetry() {
 
 connectWithRetry();
 
+app.get("/", (req, res) => {
+  res.send("Citizen Backend is running ✅");
+});
+
 app.get("/countries", (req, res) => {
   db.query("SELECT * FROM country", (err, results) => {
     if (err) {
