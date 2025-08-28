@@ -16,20 +16,20 @@ function connectWithRetry() {
   connectionAttempts++;
   
   const dbConfig = {
-    host: process.env.MYSQLHOST || "switchyard.proxy.rlwy.net",
-    user: process.env.MYSQLUSER || "root",
-    password: process.env.MYSQLPASSWORD || "aHZgLzUEMhBowANJSnpTahXgYawkVLbL",
-    port: process.env.MYSQLPORT || 13701,
-    database: process.env.MYSQLDATABASE || "railway",
-    connectTimeout: 60000,
-    acquireTimeout: 60000,
-    timeout: 60000,
-    reconnect: true
+    host: "switchyard.proxy.rlwy.net",
+    user: "root", 
+    password: "aHZgLzUEMhBowANJSnpTahXgYawkVLbL",
+    port: 13701,
+    database: "railway",
+    connectTimeout: 60000
   };
 
   console.log(`Connection attempt ${connectionAttempts}`);
   console.log(`Database: ${dbConfig.database}`);
   console.log(`Host: ${dbConfig.host}`);
+  console.log(`User: ${dbConfig.user}`);
+  console.log(`Port: ${dbConfig.port}`);
+  console.log(`Password length: ${dbConfig.password ? dbConfig.password.length : 0}`);
 
   db = mysql.createConnection(dbConfig);
 
