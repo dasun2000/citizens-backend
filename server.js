@@ -5,49 +5,74 @@ const cors = require("cors");
 
 const app = express();
 
+// CORS configuration
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    /\.railway\.app$/,  
-    /\.vercel\.app$/,   
-    /\.netlify\.app$/   
+    /\.railway\.app$/,
+    /\.vercel\.app$/,
+    /\.netlify\.app$/
   ],
   credentials: true
 }));
 
 app.use(bodyParser.json());
 
-// Create connection pool instead of single connection
+// Create connection pool with validated options
 const pool = mysql.createPool({
-  host: process.env.MYSQLHOST,
-  user: process.env.MYSQLUSER,
-  password: process.env.MYSQLPASSWORD,
-  database: process.env.MYSQLDATABASE,
-  port: process.env.MYSQLPORT,
+  host: process.env.MYSQLHOST || "localhost",
+  user: process.env.MYSQLUSER || "root",
+  password: process.env.MYSQLPASSWORD || "",
+  database: process.env.MYSQLDATABASE || "railway",
+  port: process.env.MYSQLPORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true
+  // Removed invalid options: acquireTimeout, timeout, reconnect
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
 // Get a promise-based interface to the pool
 const promisePool = pool.promise();
 
-// Test connection on startup
-async function testConnection() {
-  try {
-    const connection = await promisePool.getConnection();
-    console.log("✅ Connected to MySQL Database successfully!");
-    console.log("Host:", process.env.MYSQLHOST);
-    console.log("Database:", process.env.MYSQLDATABASE);
-    connection.release();
-  } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
+// Enhanced connection test with retry logic
+async function testConnection(retries = 5, delay = 3000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const connection = await promisePool.getConnection();
+      console.log("✅ Connected to MySQL Database successfully!");
+      console.log("Host:", process.env.MYSQLHOST);
+      console.log("Database:", process.env.MYSQLDATABASE);
+      console.log("User:", process.env.MYSQLUSER);
+      
+      // Test a simple query
+      const [results] = await connection.query("SELECT VERSION() as version");
+      console.log("MySQL Version:", results[0].version);
+      
+      connection.release();
+      return true;
+    } catch (err) {
+      console.error(`❌ Connection attempt ${i + 1} failed:`, err.message);
+      
+      if (i === retries - 1) {
+        console.error("All connection attempts failed. Please check your database configuration.");
+        console.log("Current environment variables:", {
+          MYSQLHOST: process.env.MYSQLHOST,
+          MYSQLUSER: process.env.MYSQLUSER,
+          MYSQLDATABASE: process.env.MYSQLDATABASE,
+          MYSQLPORT: process.env.MYSQLPORT
+        });
+        return false;
+      }
+      
+      console.log(`Retrying in ${delay/1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 }
 
+// Test connection on startup
 testConnection();
 
 // Health check endpoint
