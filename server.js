@@ -16,20 +16,14 @@ app.use(cors({
 }));
 
 app.use(bodyParser.json());
-
-// Database connection with Railway MySQL credentials
 const db = mysql.createConnection({
-  host: process.env.MYSQLHOST || "switchyard.proxy.rlwy.net",
-  user: process.env.MYSQLUSER || "root",
-  password: process.env.MYSQLPASSWORD || "aHZgLzUEMhBowANJSnpTahXgYawkVLbL",
-  database: process.env.MYSQLDATABASE || "railway",
-  port: process.env.MYSQLPORT || 13701,
-  connectTimeout: 60000,
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLDATABASE,
+  port: process.env.MYSQLPORT,
+  connectTimeout: 60000
 });
-
 // Connection retry logic
 function connectWithRetry() {
   console.log("Attempting to connect to MySQL database...");
