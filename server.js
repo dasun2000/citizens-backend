@@ -84,7 +84,7 @@ app.get("/districts/:territoryId", (req, res) => {
 
 app.get("/seats/:districtId", (req, res) => {
   const districtId = req.params.districtId;
-  db.query("SELECT * FROM seat WHERE DistricID = ?", [districtId], (err, results) => {
+  db.query("SELECT * FROM Seat WHERE DistricID = ?", [districtId], (err, results) => {
     if (err) {
       console.error("Error fetching seats:", err);
       return res.status(500).json({ error: "Database error" });
@@ -154,7 +154,7 @@ app.post("/districts", (req, res) => {
 
 app.post("/seats", (req, res) => {
   const { CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal } = req.body;
-  const sql = "INSERT INTO seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
+  const sql = "INSERT INTO Seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
   
   db.query(sql, [CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal], (err, result) => {
     if (err) {
