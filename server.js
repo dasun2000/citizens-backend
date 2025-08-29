@@ -49,7 +49,13 @@ db.on('error', (err) => {
     console.log('Connection lost, pool will reconnect automatically');
   }
 });
-
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "Citizens Backend running successfully!",
+    status: "healthy",
+    timestamp: new Date().toISOString()
+  });
+});
 app.get("/countries", (req, res) => {
   db.query("SELECT * FROM country", (err, results) => {
     if (err) {
