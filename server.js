@@ -8,70 +8,46 @@ app.use(cors());
 app.use(bodyParser.json());
 
 
-let db;
-let connectionAttempts = 0;
-const maxAttempts = 5;
+const dbConfig = {
+  host: "switchyard.proxy.rlwy.net",
+  user: "root", 
+  password: "aHZgLzUEMhBowANJSnpTahXgYawkVLbL",
+  port: 13701,
+  database: "railway",
+  connectionLimit: 10,
+  acquireTimeout: 60000,
+  timeout: 60000,
+  reconnect: true,
+  charset: 'utf8mb4'
+};
 
-function connectWithRetry() {
-  connectionAttempts++;
-  
-  const dbConfig = {
-    host: "switchyard.proxy.rlwy.net",
-    user: "root", 
-    password: "aHZgLzUEMhBowANJSnpTahXgYawkVLbL",
-    port: 13701,
-    database: "railway",
-    connectTimeout: 60000
-  };
-
-  console.log(`Connection attempt ${connectionAttempts}`);
-  console.log(`Database: ${dbConfig.database}`);
-  console.log(`Host: ${dbConfig.host}`);
-  console.log(`User: ${dbConfig.user}`);
-  console.log(`Port: ${dbConfig.port}`);
-  console.log(`Password length: ${dbConfig.password ? dbConfig.password.length : 0}`);
-
-  db = mysql.createConnection(dbConfig);
-
-  db.connect(err => {
-    if (err) {
-      console.error(`Connection attempt ${connectionAttempts} failed:`, err.message);
-      
-      if (connectionAttempts < maxAttempts) {
-        console.log('Retrying in 3 seconds...');
-        setTimeout(connectWithRetry, 3000);
-      } else {
-        console.error('All connection attempts failed. Please check your database configuration.');
-        console.log('Current environment variables:', {
-          MYSQLHOST: process.env.MYSQLHOST,
-          MYSQLUSER: process.env.MYSQLUSER,
-          MYSQLDATABASE: process.env.MYSQLDATABASE,
-          MYSQLPORT: process.env.MYSQLPORT
-        });
-        process.exit(1);
-      }
-      return;
-    }
-    
-    console.log(` Connected to MySQL Database: ${dbConfig.database}`);
-    connectionAttempts = 0; 
-  });
-
-  
-  db.on('error', (err) => {
-    console.error('Database connection error:', err);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-      console.log('Attempting to reconnect...');
-      connectWithRetry();
-    }
-  });
-}
+console.log(`Connecting to MySQL Database: ${dbConfig.database}`);
+console.log(`Host: ${dbConfig.host}:${dbConfig.port}`);
 
 
-connectWithRetry();
+const db = mysql.createPool(dbConfig);
 
-app.get("/", (req, res) => {
-  res.send("Citizen Backend is running ");
+
+db.getConnection((err, connection) => {
+  if (err) {
+    console.error(' Database connection failed:', err.message);
+    process.exit(1);
+  } else {
+    console.log(' Connected to MySQL Database: railway');
+    connection.release(); 
+  }
+});
+
+
+db.on('connection', (connection) => {
+  console.log('New connection established as id ' + connection.threadId);
+});
+
+db.on('error', (err) => {
+  console.error('Database pool error:', err);
+  if(err.code === 'PROTOCOL_CONNECTION_LOST') {
+    console.log('Connection lost, pool will reconnect automatically');
+  }
 });
 
 app.get("/countries", (req, res) => {
@@ -108,7 +84,7 @@ app.get("/districts/:territoryId", (req, res) => {
 
 app.get("/seats/:districtId", (req, res) => {
   const districtId = req.params.districtId;
-  db.query("SELECT * FROM Seat WHERE DistricID = ?", [districtId], (err, results) => {
+  db.query("SELECT * FROM seat WHERE DistricID = ?", [districtId], (err, results) => {
     if (err) {
       console.error("Error fetching seats:", err);
       return res.status(500).json({ error: "Database error" });
@@ -178,7 +154,7 @@ app.post("/districts", (req, res) => {
 
 app.post("/seats", (req, res) => {
   const { CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal } = req.body;
-  const sql = "INSERT INTO Seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
+  const sql = "INSERT INTO seat(CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal) VALUES(?, ?, ?, ?, ?, ?, ?)";
   
   db.query(sql, [CountryID, TerritoryID, DistricID, SeatDescption, Auser, Muser, Terminal], (err, result) => {
     if (err) {
