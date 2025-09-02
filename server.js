@@ -55,7 +55,7 @@ app.get("/", (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
-
+//jhiophpphphpijhpwsjhp
 app.post("/login" ,(req,res)=>{
   const {usename,password}=req.body;
   if(!usename || !password){
@@ -66,7 +66,7 @@ app.post("/login" ,(req,res)=>{
       console.error("error",err)
       return res.status(500).json({ error: "Database error" });
     }
-    else if (results.length>0){
+    if (results.length>0){
       res.json({success:true,message:"login succesful",user:{id:results[0].UserID,usename:results[0].Username}});
     }
     else{
