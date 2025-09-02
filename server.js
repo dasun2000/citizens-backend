@@ -55,6 +55,26 @@ app.get("/", (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+app.post("/login" ,(req,res)=>{
+  const {usename,password}=req.body;
+  if(!usename || !password){
+    return res.status(400).json({success:false,message:"usename & password are required"});
+  }
+  db.query("SELECT * FROM users WHERE Username=? Password =? ",[usename,password],(err,results)=>{
+    if(err){
+      console.error("error",err)
+      return res.status(500).json({ error: "Database error" });
+    }
+    else if (results.length>0){
+      res.json({success:true,message:"login succesful",user:{id:results[0].UserID,usename:results[0].Username}});
+    }
+    else{
+      res.status(401).json({success:false,message:"Invalid Username or Password"});
+    }
+  });
+});
+
 app.get("/countries", (req, res) => {
   db.query("SELECT * FROM country", (err, results) => {
     if (err) {
