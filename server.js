@@ -65,7 +65,7 @@ app.post("/login" ,(req,res)=>{
       console.error("error",err)
       return res.status(500).json({ error: "Database error" });
     }
-    if (results.length>0){
+    else if (results.length>0){
       res.json({success:true,message:"login succesful",user:{id:results[0].UserID,username:results[0].Username}});
     }
     else{
